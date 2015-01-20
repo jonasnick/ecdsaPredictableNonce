@@ -8,6 +8,8 @@ import (
 	"log"
 	"math/big"
 
+	//"github.com/jonasnick/ecdsaPredictableNonce/big"
+
 	"github.com/obscuren/secp256k1-go"
 )
 
@@ -62,22 +64,15 @@ func fn2(r, s *big.Int) *big.Int {
 }
 
 // fn1 * (1-fn2)^-1
-func testXor(seckey, z *big.Int) {
-	xor := big.NewInt(0).Mod(big.NewInt(0).Xor(seckey, z), n)
-	x := big.NewInt(0).And(seckey, z)
-	x = additiveInv(big.NewInt(0).Mod(big.NewInt(0).Mul(big.NewInt(2), x), n))
-	y := big.NewInt(0).Add(seckey, z)
-	x = big.NewInt(0).Mod(big.NewInt(0).Add(y, x), n)
-	if x == big.NewInt(0) || x != xor {
-		panic("x!=xor")
-	}
-}
-
 // returns a slice of r and a slice of s
-func signatures(seckey []byte, n int) ([]*big.Int, []*big.Int, []*big.Int) {
+func signatures(n int) ([]*big.Int, []*big.Int, []*big.Int) {
 	rs := make([]*big.Int, n)
 	ss := make([]*big.Int, n)
 	zs := make([]*big.Int, n)
+
+	//_, seckey := secp256k1.GenerateKeyPair()
+	seckey := []byte{78, 210, 169, 208, 35, 22, 85, 33, 213, 206, 82, 33, 137, 76, 85, 234, 82, 174, 175, 134, 63, 181, 37, 131, 79, 227, 32, 12, 178, 209, 97, 164}
+	fmt.Println("seckey", fmt.Sprintf("%X", seckey))
 
 	for i := 0; i < n; i++ {
 		z := secp256k1.RandByte(32)
@@ -88,18 +83,18 @@ func signatures(seckey []byte, n int) ([]*big.Int, []*big.Int, []*big.Int) {
 		r_sig := sig[0:32]
 		s_sig := sig[32:64]
 		rs[i] = byteToBig(r_sig)
-		/*     if sig[64] == 1 {*/
-		//ss[i] = additiveInv(byteToBig(s_sig))
-		//} else {
-		ss[i] = byteToBig(s_sig)
-		//}
 		zs[i] = byteToBig(z)
+		ss[i] = potentiallyInverseS(rs[i], byteToBig(s_sig), zs[i], byteToBig(seckey))
+		if ss[i] == nil {
+			panic("nil")
+		}
+
 	}
 	return rs, ss, zs
 }
 
 // s = k^-1(z + rd) mod n
-func check(seckey, r, s, z *big.Int) {
+func checkECDSA(seckey, r, s, z *big.Int) {
 	k := big.NewInt(0).Xor(seckey, z)
 	a := big.NewInt(0).ModInverse(k, n)
 	rda := big.NewInt(0).Mod(big.NewInt(0).Mul(r, seckey), n)
@@ -109,9 +104,7 @@ func check(seckey, r, s, z *big.Int) {
 	//sNew = additiveInv(sNew)
 	//}
 	if bytes.Compare(sNew.Bytes(), s.Bytes()) != 0 {
-		fmt.Println("sNew", sNew)
 		fmt.Printf("sNew %#X\n", sNew)
-		fmt.Println("s", s)
 		fmt.Printf("s %#X\n", s)
 		log.Fatal("check not positive")
 	}
@@ -256,11 +249,40 @@ func checkDerivation3(a1, b1, a2, b2, d_a *big.Int) error {
 func potentiallyInverseS(r, s, z, d_a *big.Int) *big.Int {
 	if checkDerivation1(r, s, z, d_a) != nil {
 		s = additiveInv(s)
-		//fmt.Println("inverse")
 		// sanity check
 		if err := checkDerivation1(r, s, z, d_a); err != nil {
 			panic("failed potentially inverse")
 		}
+	}
+	return s
+}
+
+func secp256k1_f(x *big.Int) *big.Int {
+	y := big.NewInt(0).Exp(x, big.NewInt(3), p)
+	y = big.NewInt(0).Mod(big.NewInt(0).Add(y, big.NewInt(7)), p)
+	//y = big.NewInt(0).ModSqrt(y, p)
+	return y
+}
+
+func isOdd(x *big.Int) bool {
+	m := big.NewInt(2)
+	mod := big.NewInt(0).Mod(x, m)
+	return big.NewInt(0).Cmp(mod) < 0
+}
+
+func potentiallyInverseS2(r, s, z, d_a *big.Int, recid byte) *big.Int {
+	y := secp256k1_f(r)
+	fmt.Println(y)
+	fmt.Println(recid, isOdd(y))
+	if (recid > 0 && !isOdd(y)) || (recid == 0 && isOdd(y)) {
+		// 0 false
+		// 0
+		fmt.Println("inv")
+		s = additiveInv(s)
+
+	}
+	if err := checkDerivation1(r, s, z, d_a); err != nil {
+		panic("failed second potentially inverse")
 	}
 	return s
 }
@@ -346,26 +368,32 @@ func row(r, s, z, rp, sp, zp *big.Int) (*big.Int, []*big.Int) {
 	return a, c
 }
 
-func collectRows(rs, ss, zs []*big.Int, da *big.Int) ([]*big.Int, [][]*big.Int) {
+func collectRows(rs, ss, zs []*big.Int) ([]*big.Int, [][]*big.Int) {
 	num := len(rs)
 	numRows := num / 2
 	//log.Println("numRows", numRows)
-	alphas := make([]*big.Int, numRows)
-	coefs := make([][]*big.Int, numRows)
+	alphas := make([]*big.Int, 0)
+	coefs := make([][]*big.Int, 0)
 	for i := 0; i < numRows; i += 1 {
 		r, s, z := rs[2*i], ss[2*i], zs[2*i]
 		r2, s2, z2 := rs[2*i+1], ss[2*i+1], zs[2*i+1]
-		s = potentiallyInverseS(r, s, z, da)
-		s2 = potentiallyInverseS(r2, s2, z2, da)
 
 		a, c := row(r, s, z, r2, s2, z2)
-		err := checkDerivation2b(a, r, s, z, r2, s2, z2, da)
-		if err != nil {
-			log.Fatal(err)
-		}
-		alphas[i] = a
-		coefs[i] = c
+		alphas = append(alphas, a)
+		coefs = append(coefs, c)
 	}
+
+	/* for i := 0; i < num; i += 1 {*/
+	//for j := i + 1; j < num; j += 1 {
+	//r, s, z := rs[i], ss[i], zs[i]
+	//r2, s2, z2 := rs[j], ss[j], zs[j]
+
+	//a, c := row(r, s, z, r2, s2, z2)
+	//alphas = append(alphas, a)
+	//coefs = append(coefs, c)
+	//}
+	/*}*/
+	fmt.Println("lens", len(alphas), len(coefs))
 	return alphas, coefs
 }
 
@@ -385,53 +413,52 @@ func verifyGauss(alphas []*big.Int, coefs [][]*big.Int, x []*big.Int) error {
 	return nil
 }
 
+func recoverKey(rs, ss, zs []*big.Int) *big.Int {
+	alphas, coefs := collectRows(rs, ss, zs)
+	x, err := GaussPartial(coefs, alphas, n)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return bigIntFromBitVector(x)
+}
+
 func main() {
-	fmt.Println("p", len(p.Bytes()), p)
-	fmt.Println("n", len(n.Bytes()), n)
-	//_, seckey := secp256k1.GenerateKeyPair()
-	seckey := []byte{78, 210, 169, 208, 35, 22, 85, 33, 213, 206, 82, 33, 137, 76, 85, 234, 82, 174, 175, 134, 63, 181, 37, 131, 79, 227, 32, 12, 178, 209, 97, 164}
-	fmt.Println("seckey", len(seckey), ": ", seckey)
-	fmt.Println("seckey", byteToBig(seckey))
+	rs, ss, zs := signatures(512)
+	//signatures(30)
+	//d_a := byteToBig(seckey)
+	d := recoverKey(rs, ss, zs)
+	fmt.Println("recovered key", fmt.Sprintf("%X", d))
 
-	rs, ss, zs := signatures(seckey, 512)
-	d_a := byteToBig(seckey)
-	s0 := potentiallyInverseS(rs[0], ss[0], zs[0], d_a)
-	s1 := potentiallyInverseS(rs[1], ss[1], zs[1], d_a)
-	a1 := alpha(rs[0], s0, zs[0], rs[1], s1, zs[1])
+	/* s0 := potentiallyInverseS(rs[0], ss[0], zs[0], d_a)*/
+	//s1 := potentiallyInverseS(rs[1], ss[1], zs[1], d_a)
+	//a1 := alpha(rs[0], s0, zs[0], rs[1], s1, zs[1])
 
-	check(d_a, rs[0], s0, zs[0])
-	check(d_a, rs[1], s1, zs[1])
+	//check(d_a, rs[0], s0, zs[0])
+	//check(d_a, rs[1], s1, zs[1])
 
-	if err := checkDerivation1(rs[0], s0, zs[0], d_a); err != nil {
-		log.Fatal(err)
-	}
+	//if err := checkDerivation1(rs[0], s0, zs[0], d_a); err != nil {
+	//log.Fatal(err)
+	//}
 
-	if err := checkDerivation1(rs[1], s1, zs[1], d_a); err != nil {
-		log.Fatal(err)
-	}
+	//if err := checkDerivation1(rs[1], s1, zs[1], d_a); err != nil {
+	//log.Fatal(err)
+	//}
 
-	if err := checkDerivation2a(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
-		log.Fatal(err)
-	}
+	//if err := checkDerivation2a(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
+	//log.Fatal(err)
+	//}
 
-	if err := checkDerivation2b(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
-		log.Fatal(err)
-	}
+	//if err := checkDerivation2b(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
+	//log.Fatal(err)
+	//}
 
-	alphas, coefs := collectRows(rs, ss, zs, d_a)
-	//fmt.Println(len(alphas), len(coefs), len(coefs[0]))
-	x, err := GaussPartial(coefs, alphas, n, n)
-	if err != nil {
-		log.Fatal(err)
-	}
+	//fmt.Println("key is", x)
+	//fmt.Println("seckey", bitVector(d_a, 32))
 
-	fmt.Println("key is", x)
-	fmt.Println("seckey", bitVector(d_a, 32))
-
-	err = verifyGauss(alphas, coefs, x)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("everything all right")
+	//err = verifyGauss(alphas, coefs, x)
+	//if err != nil {
+	//log.Fatal(err)
+	//}
+	/*fmt.Println("everything all right")*/
 
 }
