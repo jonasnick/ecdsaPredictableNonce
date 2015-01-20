@@ -1,5 +1,5 @@
 # ecdsaPredictableNonce
-Breaks an ecdsa implementation that uses `secret xor message` as nonce. This requires 512 signatures.
+Breaks an ecdsa implementation that uses `secret xor message` as nonce and reuses `secret`. This requires 512 signatures.
 An detailed explanation of the attack can be found in the
 [explanation.pdf](explanation/explanation.md).
 
