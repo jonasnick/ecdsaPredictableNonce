@@ -11,12 +11,12 @@ Let $n, G$ be the parameters of secp256k1, where $n$ is the curve order and $G$ 
 Let $d_A$ be the private key $\in [1, n-1]$, $z$ be the hash of the message, $(r,s)$ the signature corresponding
 to the private key $d_A$ where $r,s \in [0, n-1]$, and $k$ the corresponding nonce.
 
-Then it holds that $s=k^{-1}(z+rd_A)\mod n$. The obscuren/secp256k1-go package chooses $k$ to be
+Then it holds that $s=k^{-1}(z+rd_A)\mod n$. The github.com/obscuren/secp256k1-go package chooses $k$ to be
 $z\oplus d_A$ (xor). 
 At first glance this seems to be ok, since $k$ is unique for each message and
 it is unpredictable. An attacker can not directly influence $z$ because it is the outcome of a hash function.
 However, if an attacker obtains multiple signatures, the reuse of $d_A$ becomes a problem because $k$ 
-becomes predictable. Note that $a \oplus b = a + b - 2(a\wedge b)$.
+becomes in fact predictable. Note that $a \oplus b = a + b - 2(a\wedge b)$.
 \begin{align*}
 s&=k^{-1}(z+rd_A) \\
     &= (d_A\oplus z)^{-1}(z+rd_A)\\
@@ -52,7 +52,7 @@ such that
     &= \sum_{j} d_{A_j} 2^j (z_j \beta - z_j' \gamma')
 \end{align*}
 where $\delta_i$ is the $i$-th bit of some $\delta$.
-Now the attacker collects 256 such signature pairs and solve the linear system for $d_A$ with $2^j (z_j k - z_j' k')$ as coefficient.
+Now the attacker collects 512 signatures, forms 256 such signature pairs and solves the linear system for $d_A$ with $2^j (z_j k - z_j' k')$ as coefficient.
 
 \end{document}
 
