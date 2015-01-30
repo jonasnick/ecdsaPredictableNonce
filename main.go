@@ -84,7 +84,11 @@ func signatures(n int) ([]*big.Int, []*big.Int, []*big.Int) {
 		s_sig := sig[32:64]
 		rs[i] = byteToBig(r_sig)
 		zs[i] = byteToBig(z)
-		ss[i] = potentiallyInverseS(rs[i], byteToBig(s_sig), zs[i], byteToBig(seckey))
+		// have to negate s if it has been negated in the secp256k1 library
+		// requires knowledge seckey here, but if there was a ModSqrt in the big package
+		// we could determine if s has to be negated by computing r.y and then checking if
+		// it is odd
+		ss[i] = maybeNegateS(rs[i], byteToBig(s_sig), zs[i], byteToBig(seckey))
 		//ss[i] = byteToBig(s_sig)
 		if ss[i] == nil {
 			panic("nil")
@@ -119,7 +123,7 @@ func hash(data []byte) []byte {
 }
 
 // d_a = fn1 + fn2*(d_A and z)
-func checkDerivation1(r, s, z, d_a *big.Int) error {
+func checkEquation1(r, s, z, d_a *big.Int) error {
 	a := fn1(r, s, z)
 	b := fn2(r, s)
 	k := big.NewInt(0).Mod(big.NewInt(0).And(z, d_a), n)
@@ -176,7 +180,7 @@ func bigIntFromBitVector(v []*big.Int) *big.Int {
 }
 
 // alpha = fn2(r, s)* (da & z) - fn2(r', s') * (da & zp)
-func checkDerivation2a(a, r, s, z, rp, sp, zp, da *big.Int) error {
+func checkEquation2a(a, r, s, z, rp, sp, zp, da *big.Int) error {
 	a1 := big.NewInt(0).Mod(big.NewInt(0).And(z, da), n)
 	a2 := big.NewInt(0).Mod(big.NewInt(0).And(zp, da), n)
 	b1 := fn2(r, s)
@@ -205,7 +209,7 @@ func checkDerivation2a(a, r, s, z, rp, sp, zp, da *big.Int) error {
 }
 
 // alpha == sum d_i * 2^i * (fn2(r, s) z_i - fn2(r', s') z_i'
-func checkDerivation2b(a, r, s, z, rp, sp, zp, da *big.Int) error {
+func checkEquation2b(a, r, s, z, rp, sp, zp, da *big.Int) error {
 	z_bits := bitVector(z, 32)
 	zp_bits := bitVector(zp, 32)
 	da_bits := bitVector(da, 32)
@@ -233,7 +237,7 @@ func checkDerivation2b(a, r, s, z, rp, sp, zp, da *big.Int) error {
 	return nil
 }
 
-func checkDerivation3(a1, b1, a2, b2, d_a *big.Int) error {
+func checkEquation3(a1, b1, a2, b2, d_a *big.Int) error {
 	//fmt.Println(a1.Bytes(
 	a := big.NewInt(0).Or(a1, a2)
 	b := big.NewInt(0).Or(b1, b2)
@@ -247,11 +251,12 @@ func checkDerivation3(a1, b1, a2, b2, d_a *big.Int) error {
 	return nil
 }
 
-func potentiallyInverseS(r, s, z, d_a *big.Int) *big.Int {
-	if checkDerivation1(r, s, z, d_a) != nil {
+// negate s if checkEquation1 fails
+func maybeNegateS(r, s, z, d_a *big.Int) *big.Int {
+	if checkEquation1(r, s, z, d_a) != nil {
 		s = additiveInv(s)
 		// sanity check
-		if err := checkDerivation1(r, s, z, d_a); err != nil {
+		if err := checkEquation1(r, s, z, d_a); err != nil {
 			panic("failed potentially inverse")
 		}
 	}
@@ -271,7 +276,7 @@ func isOdd(x *big.Int) bool {
 	return big.NewInt(0).Cmp(mod) < 0
 }
 
-func potentiallyInverseS2(r, s, z, d_a *big.Int, recid byte) *big.Int {
+func maybeNegateS2(r, s, z, d_a *big.Int, recid byte) *big.Int {
 	y := secp256k1_f(r)
 	fmt.Println(y)
 	fmt.Println(recid, isOdd(y))
@@ -282,7 +287,7 @@ func potentiallyInverseS2(r, s, z, d_a *big.Int, recid byte) *big.Int {
 		s = additiveInv(s)
 
 	}
-	if err := checkDerivation1(r, s, z, d_a); err != nil {
+	if err := checkEquation1(r, s, z, d_a); err != nil {
 		panic("failed second potentially inverse")
 	}
 	return s
@@ -429,26 +434,26 @@ func main() {
 	d := recoverKey(rs, ss, zs)
 	fmt.Println("recovered key", fmt.Sprintf("%X", d))
 
-	/* s0 := potentiallyInverseS(rs[0], ss[0], zs[0], d_a)*/
-	//s1 := potentiallyInverseS(rs[1], ss[1], zs[1], d_a)
+	/* s0 := maybeNegateS(rs[0], ss[0], zs[0], d_a)*/
+	//s1 := maybeNegateS(rs[1], ss[1], zs[1], d_a)
 	//a1 := alpha(rs[0], s0, zs[0], rs[1], s1, zs[1])
 
 	//check(d_a, rs[0], s0, zs[0])
 	//check(d_a, rs[1], s1, zs[1])
 
-	//if err := checkDerivation1(rs[0], s0, zs[0], d_a); err != nil {
+	//if err := checkEquation1(rs[0], s0, zs[0], d_a); err != nil {
 	//log.Fatal(err)
 	//}
 
-	//if err := checkDerivation1(rs[1], s1, zs[1], d_a); err != nil {
+	//if err := checkEquation1(rs[1], s1, zs[1], d_a); err != nil {
 	//log.Fatal(err)
 	//}
 
-	//if err := checkDerivation2a(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
+	//if err := checkEquation2a(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
 	//log.Fatal(err)
 	//}
 
-	//if err := checkDerivation2b(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
+	//if err := checkEquation2b(a1, rs[0], s0, zs[0], rs[1], s1, zs[1], d_a); err != nil {
 	//log.Fatal(err)
 	//}
 
