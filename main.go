@@ -70,8 +70,8 @@ func signatures(n int) ([]*big.Int, []*big.Int, []*big.Int) {
 	ss := make([]*big.Int, n)
 	zs := make([]*big.Int, n)
 
-	//_, seckey := secp256k1.GenerateKeyPair()
-	seckey := []byte{78, 210, 169, 208, 35, 22, 85, 33, 213, 206, 82, 33, 137, 76, 85, 234, 82, 174, 175, 134, 63, 181, 37, 131, 79, 227, 32, 12, 178, 209, 97, 164}
+	_, seckey := secp256k1.GenerateKeyPair()
+	//seckey := []byte{78, 210, 169, 208, 35, 22, 85, 33, 213, 206, 82, 33, 137, 76, 85, 234, 82, 174, 175, 134, 63, 181, 37, 131, 79, 227, 32, 12, 178, 209, 97, 164}
 	fmt.Println("seckey", fmt.Sprintf("%X", seckey))
 
 	for i := 0; i < n; i++ {
@@ -85,6 +85,7 @@ func signatures(n int) ([]*big.Int, []*big.Int, []*big.Int) {
 		rs[i] = byteToBig(r_sig)
 		zs[i] = byteToBig(z)
 		ss[i] = potentiallyInverseS(rs[i], byteToBig(s_sig), zs[i], byteToBig(seckey))
+		//ss[i] = byteToBig(s_sig)
 		if ss[i] == nil {
 			panic("nil")
 		}
@@ -393,7 +394,6 @@ func collectRows(rs, ss, zs []*big.Int) ([]*big.Int, [][]*big.Int) {
 	//coefs = append(coefs, c)
 	//}
 	/*}*/
-	fmt.Println("lens", len(alphas), len(coefs))
 	return alphas, coefs
 }
 
