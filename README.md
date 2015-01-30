@@ -1,5 +1,5 @@
 # ecdsaPredictableNonce
-Breaks an ecdsa implementation that uses `secret xor message` as nonce and reuses `secret`. This requires 512 signatures.
+Breaks an ecdsa implementation that uses `secret xor message` as nonce and reuses `secret`. Recovering the full private key requires 512 signatures.
 In other words, every signature leaks 0.5 bit. It is probable that the attack can be refined such that each signature
 leaks 1 bit.
 An detailed explanation of the attack can be found in the
