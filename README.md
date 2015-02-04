@@ -11,7 +11,7 @@ The obvious fix is to use the operating system's PRNG to generate the nonce just
 Caveat
 ---
 In its current form, this attack does not directly work against github.com/obscuren/secp256k1-go package.
-The reason for this is that in order to prevent `s`-malleability, libsecp256k1 enforces an `s` that is smaller then `curve_order/2`.
+The reason for this is that in order to prevent `s`-malleability, libsecp256k1 enforces an `s` that is smaller than `curve_order/2`.
 If libsecp256k1 computes an `s` that is bigger it is negated, which essentially has the effect that the message is signed using the negative of the original nonce.
 Because this attack gets only 1 bit from each signature generated from the textbook algorithm and we don't know if `nonce` or `-nonce` has been used, the attacker looses 1 bit and thus learns nothing.
 See [this line] (https://github.com/jonasnick/ecdsaPredictableNonce/blob/master/main.go#L215) for the cheat that is used in order to ensure using the non-negated nonce.
