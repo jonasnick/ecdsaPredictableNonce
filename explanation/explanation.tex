@@ -8,51 +8,36 @@
 \begin{document}
 \maketitle 
 Let $n, G$ be the parameters of secp256k1, where $n$ is the curve order and $G$ is the base point.
-Let $d_A$ be the private key $\in [1, n-1]$, $z$ be the hash of the message, $(r,s)$ the signature corresponding
-to the private key $d_A$ where $r,s \in [0, n-1]$, and $k$ the corresponding nonce.
+Let $d$ be the private key $\in [1, n-1]$, $z$ be the hash of the message, $(r,s)$ the signature corresponding
+to the private key $d$ where $r,s \in [0, n-1]$, and $k$ the corresponding nonce.
 
-Then it holds that $s=k^{-1}(z+rd_A)\mod n$. The github.com/obscuren/secp256k1-go package chooses $k$ to be
-$z\oplus d_A$ (xor). 
+Then it holds that $s=k^{-1}(z+rd)\mod n$. The github.com/obscuren/secp256k1-go package chooses $k$ to be
+$z\oplus d$ (xor). 
 At first glance this seems to be ok, since $k$ is unique for each message and
 it is unpredictable. An attacker can not directly influence $z$ because it is the outcome of a hash function.
-However, if an attacker obtains multiple signatures, the reuse of $d_A$ becomes a problem because $k$ 
-becomes in fact predictable. Note that $a \oplus b = a + b - 2(a\wedge b)$.
+However, if an attacker obtains multiple signatures, the reuse of $d$ becomes a problem because $k$ 
+becomes in fact predictable. 
+
+The problem can be reformulated to a linear system:
+\begin{equation}
+    \alpha = \sum_i d_i 2^i \beta_i
+\end{equation}
+where $\alpha = (s-1)z$ and $\beta_i = (r + (2z_i - 1)s)$ and $d_i$, $z_i$ are the $i$-th bit in the binary representation of $d$ and $z_i$.
+Thus, the attacker collects 256 signatures and solves the linear system for $d$. 
+In other words, each signature leaks one bit of the private key.
+
+\section{Proof}
+
+Note that $a \oplus b = a + b - 2(a\wedge b)$.
 \begin{align*}
-s&=k^{-1}(z+rd_A) \\
-    &= (d_A\oplus z)^{-1}(z+rd_A)\\
-    &= (d_A + z - 2(d_A\wedge b))(z+rd_A)\\
-    \iff d_As + zs - 2s(d_A\wedge z)&= z + rd_A\\
-    \iff (s-r)d_A &= (1-s)z + 2s(d_A\wedge z)\\
-    \iff d_A &= ((1-s)z + 2s(d_A\wedge z))(s-r)^{-1}
+s&=k^{-1}(z+rd) \\
+    &= (d\oplus z)^{-1}(z+rd)\\
+    &= (d + z - 2(d\wedge b))^{-1}(z+rd)\\
+    \iff ds + zs - 2s(d\wedge z)&= z + rd\\
+    \iff (s-1)z &= 2s(d\wedge z) (s-r)d\\
+                &= \sum_i 2^i d_i z_i 2s + \sum_i 2^i d_i (r-s) \\
+                &= \sum_i d_i 2^i (r + (2z_i - 1)s) \\
 \end{align*}
-Assume that the attacker obtains a second signature $(r', s')$ over $z'$.
-Then it holds that
-\begin{align*}
-    d_A - d_A &= ((1-s)z + 2s(d_A\wedge z))(s-r)^{-1} - ((1-s')z' + 2s'(d_A\wedge z'))(s'-r')^{-1} \\
-\iff  0  &= (1-s)z(s-r)^{-1} + 2s(d_A\wedge z)(s-r)^{-1} - (1-s')z'(s'-r')^{-1} - 2s'(d_A\wedge z')(s'-r')^{-1} 
-\end{align*}
-$$
-    \iff(1-s')z'(s'-r')^{-1} - (1-s)z(s-r)^{-1}=  2s(s-r)^{-1}(z \wedge d_A) - 2s'(s'-r')^{-1}(z' \wedge d_A) ) \\
-$$
-
-
-Let 
-\begin{align*}
-    \alpha &= (1-s')z'(s'-r')^{-1} - (1-s)z(s-r)^{-1}, \\
-    \beta &= 2s(s-r)^{-1}, \\
-    \gamma &= 2s'(s'-r')^{-1} 
-\end{align*}
-
-such that
-
-\begin{align*}
-    \alpha &= \beta (d_A \wedge z) - \gamma(d_A \wedge z) \\
-           &= \sum_{i} \beta_i 2^i\sum_{j} d_{A_j} z_j 2^{j} - \sum_{i} \gamma_i' 2^i\sum_{j} d_{A_j} z_j' 2^{j} \\
-    &= \sum_{j} d_{A_j} 2^j \sum_i (\beta_i z_j - \gamma_i' z_j') 2^i \\
-    &= \sum_{j} d_{A_j} 2^j (z_j \beta - z_j' \gamma')
-\end{align*}
-where $\delta_i$ is the $i$-th bit of some $\delta$.
-Now the attacker collects 512 signatures, forms 256 such signature pairs and solves the linear system for $d_A$ with $2^j (z_j k - z_j' k')$ as coefficient.
-
+q.e.d
 \end{document}
 
