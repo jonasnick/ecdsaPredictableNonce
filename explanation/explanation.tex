@@ -18,11 +18,11 @@ it is unpredictable. An attacker can not directly influence $z$ because it is th
 However, if an attacker obtains multiple signatures, the reuse of $d$ becomes a problem because $k$ 
 becomes in fact predictable. 
 
-The problem can be reformulated to a linear system:
+The problem can be reformulated as a linear system:
 \begin{equation}
     \alpha = \sum_i d_i 2^i \beta_i
 \end{equation}
-where $\alpha = (s-1)z$ and $\beta_i = (r + (2z_i - 1)s)$ and $d_i$, $z_i$ are the $i$-th bit in the binary representation of $d$ and $z_i$.
+where $\alpha = (s-1)z$ and $\beta_i = (r + (2z_i - 1)s)$ and $d_i$, $z_i$ are the $i$-th bit in the binary representation of $d$ and $z$.
 Thus, the attacker collects 256 signatures and solves the linear system for $d$. 
 In other words, each signature leaks one bit of the private key.
 
