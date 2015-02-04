@@ -1,7 +1,7 @@
 # ecdsaPredictableNonce
 Breaks an ecdsa implementation that uses `privKey xor message` as nonce. Recovering the full private key requires 256 signatures.
 In other words, every signature leaks 1 bit. 
-An detailed explanation of the attack can be found in the
+A detailed explanation of the attack can be found in the
 [explanation.pdf](https://github.com/jonasnick/ecdsaPredictableNonce/raw/master/explanation/explanation.pdf).
 
 `main.go` is the implementation of an attack specifically against a vulnerable version of [github.com/obscuren/secp256k1-go](https://github.com/obscuren/secp256k1-go).
@@ -16,3 +16,4 @@ If libsecp256k1 computes an `s` that is bigger it is negated, which essentially 
 Because this attack gets only 1 bit from each signature generated from the textbook algorithm and we don't know if `nonce` or `-nonce` has been used, the attacker looses 1 bit and thus learns nothing.
 See [this line] (https://github.com/jonasnick/ecdsaPredictableNonce/blob/master/main.go#L215) for the cheat that is used in order to ensure using the non-negated nonce.
 
+Thanks to Pieter Wuille ("sipa") for some helpful discussion.
