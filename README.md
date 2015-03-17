@@ -1,4 +1,4 @@
-# Ethereum Bug Bounty Submission: Predictable ECDSA eNonce
+# Ethereum Bug Bounty Submission: Predictable ECDSA Nonce
 Breaks an ecdsa implementation that uses `privKey xor message` as nonce. Recovering the full private key requires 256 signatures.
 In other words, every signature leaks 1 bit. 
 A detailed explanation of the attack can be found in the
